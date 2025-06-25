@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8">
+  <title>🚀 Space Dodger Shooter + Music</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:100%; height:100%; overflow:hidden; background:#000; }
+    canvas { display:block; }
+    #score {
+      position:absolute; top:10px; left:20px;
+      font-family:'Segoe UI',sans-serif; color:#0f0;
+      font-size:24px; z-index:10;
+    }
+    #game-over {
+      position:absolute; top:50%; left:50%;
+      transform:translate(-50%, -50%);
+      font-family:'Segoe UI',sans-serif;
+      color:#fff; background:rgba(0,0,0,0.8);
+      padding:20px; border-radius:8px;
+      text-align:center; display:none; z-index:10;
+    }
+    #game-over button {
+      margin-top:12px; padding:8px 16px;
+      font-size:16px; cursor:pointer;
+    }
+    .controls {
+      position:absolute; bottom:20px; left:50%;
+      transform:translateX(-50%);
+      display:flex; gap:80px; /* Suurempi väli nappeihin */
+      z-index:10;
+    }
+    .btn {
+      width:100px; height:100px; /* Isompi nappi */
+      background:rgba(255,255,255,0.2);
+      border:2px solid #fff; border-radius:50%;
+      display:flex; align-items:center;
+      justify-content:center; font-size:48px; /* Isompi emoteksti */
+      user-select:none; touch-action:none;
+    }
+    .btn:active {
+      background:#fff; color:#000;
+    }
+    /* Piilota oletusäänentoiston kontrollit */
+    audio { display:none; }
+    /* Pieni äänikuvake mykistyspainikkeelle */
+    #mute-btn {
+      position:absolute; top:10px; right:20px;
+      width:32px; height:32px;
+      background:url('speaker-on.png') no-repeat center/contain;
+      cursor:pointer; z-index:10;
+    }
+    #mute-btn.muted {
+      background-image:url('speaker-off.png');
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Taustamusiikki (loop) -->
+  <audio id="bgMusic" src="background.mp3" loop></audio>
+  <div id="mute-btn"></div>
+
+  <div id="score">Pisteet: 0</div>
+  <div id="game-over">
+    <div id="final-score">Peli ohi!</div>
+    <button onclick="location.reload()">Pelaa uudelleen</button>
+  </div>
+
+  <!-- Kännykkäkontrollit: Ylös, Alas, Ampu -->
+  <div class="controls">
+    <div class="btn" id="btn-up">⬆️</div>
+    <div class="btn" id="btn-down">⬇️</div>
+    <div class="btn" id="btn-shoot">🔫</div>
+  </div>
+
+  <canvas id="game"></canvas>
+
+  <script>
+  (() => {
+    const bgMusic = document.getElementById('bgMusic');
+    const muteBtn = document.getElementById('mute-btn');
+    let muted = false;
+
+    // Käynnistä musiikki ensimmäisestä kosketuksesta/klikistä
+    function unlockAudio() {
+      bgMusic.play().catch(()=>{});
+      document.body.removeEventListener('touchstart', unlockAudio);
+      document.body.removeEventListener('click', unlockAudio);
+    }
+    document.body.addEventListener('touchstart', unlockAudio, { once: true });
+    document.body.addEventListener('click', unlockAudio, { once: true });
+
+    // Mykistys
+    muteBtn.addEventListener('click', () => {
+      muted = !muted;
+      bgMusic.muted = muted;
+      muteBtn.classList.toggle('muted', muted);
+    });
+
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    let W = canvas.width = window.innerWidth;
+    let H = canvas.height = window.innerHeight;
+
+    // Taustatähdet
+    class Star {
+      constructor(speed, size, x, y){
+        this.x = x; this.y = y; this.z = size; this.speed = speed;
+      }
+      update() {
+        this.x -= this.speed;
+        if (this.x < 0) this.x = W + Math.random()*100;
+      }
+      draw() {
+        ctx.fillStyle = 'rgba(255,255,255,' + (this.z/3) + ')';
+        ctx.fillRect(this.x, this.y, this.z, this.z);
+      }
+    }
+    const stars = [];
+    for (let i = 0; i < 200; i++) {
+      stars.push(new Star(
+        Math.random()*0.6+0.2,
+        Math.random()*2+1,
+        Math.random()*W,
+        Math.random()*H
+      ));
+    }
+
+    // Pelaaja-alus
+    const player = {
+      x: 100, y: H/2, size: 30, dy: 0,
+      update() {
+        this.y += this.dy;
+        if (this.y < this.size) this.y = this.size;
+        if (this.y > H - this.size) this.y = H - this.size;
+      },
+      draw() {
+        ctx.fillStyle = '#0ff';
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x - this.size, this.y - this.size/2);
+        ctx.lineTo(this.x - this.size, this.y + this.size/2);
+        ctx.closePath();
+        ctx.fill();
+      }
+    };
+
+    // Luodit
+    const bullets = [];
+    class Bullet {
+      constructor(x,y) {
+        this.x = x; this.y = y;
+        this.speed = 8; this.size = 6;
+      }
+      update() { this.x += this.speed; }
+      draw() {
+        ctx.fillStyle = '#ff0';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    // Asteroidit
+    const asteroids = [];
+    function spawnAsteroid() {
+      const size = Math.random()*40 + 20;
+      asteroids.push({
+        x: W + size,
+        y: Math.random()*(H - size),
+        size, speed: Math.random()*3 + 2
+      });
+    }
+
+    // Ääniefektit
+    function playTone(freq, dur=0.1) {
+      const actx = new (window.AudioContext||window.webkitAudioContext)();
+      const osc = actx.createOscillator();
+      const gain = actx.createGain();
+      osc.connect(gain); gain.connect(actx.destination);
+      osc.frequency.value = freq; osc.type = 'square';
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
+      osc.stop(actx.currentTime + dur);
+    }
+
+    // Pisteet & peli over
+    let score = 0, over = false;
+    const scoreEl = document.getElementById('score');
+    const overEl  = document.getElementById('game-over');
+    const finalEl = document.getElementById('final-score');
+
+    let frame = 0;
+    function loop() {
+      if (over) return;
+      ctx.clearRect(0, 0, W, H);
+
+      // Tähtitaivas
+      stars.forEach(s => { s.update(); s.draw(); });
+
+      // Pelaaja
+      player.update(); player.draw();
+
+      // Luodit
+      bullets.forEach((b, i) => {
+        b.update(); b.draw();
+        if (b.x > W + b.size) bullets.splice(i, 1);
+      });
+
+      // Uusia asteroideja
+      if (frame % 70 === 0) spawnAsteroid();
+
+      // Asteroidit
+      asteroids.forEach((a, i) => {
+        ctx.fillStyle = '#888';
+        ctx.beginPath();
+        ctx.arc(a.x, a.y, a.size/2, 0, Math.PI*2);
+        ctx.fill();
+        a.x -= a.speed;
+
+        // Luodin osuma
+        bullets.forEach((b, bi) => {
+          const dx = b.x - a.x, dy = b.y - a.y;
+          if (Math.hypot(dx, dy) < a.size/2 + b.size) {
+            asteroids.splice(i, 1);
+            bullets.splice(bi, 1);
+            score += 2;
+            scoreEl.innerText = 'Pisteet: ' + score;
+            playTone(800, 0.05);
+          }
+        });
+
+        // Pelaaja-törmäys
+        const dxp = player.x - a.x, dyp = player.y - a.y;
+        if (Math.hypot(dxp, dyp) < a.size/2 + player.size/2) {
+          over = true;
+          finalEl.innerText = `Pisteet: ${score}`;
+          overEl.style.display = 'block';
+          playTone(100, 0.5);
+          bgMusic.pause();
+        }
+
+        // Poistu ruudusta
+        if (a.x + a.size < 0) {
+          asteroids.splice(i, 1);
+          score++;
+          scoreEl.innerText = 'Pisteet: ' + score;
+          playTone(300, 0.05);
+        }
+      });
+
+      frame++;
+      requestAnimationFrame(loop);
+    }
+    loop();
+
+    // Näppäimistöohjaus
+    document.addEventListener('keydown', e => {
+      if (e.code === 'ArrowUp' || e.code === 'Space') {
+        player.dy = -6; playTone(500, 0.02);
+      }
+      if (e.code === 'ArrowDown') player.dy = 6;
+      if (e.code === 'KeyX') {
+        bullets.push(new Bullet(player.x + player.size/2, player.y));
+        playTone(1000, 0.02);
+      }
+    });
+    document.addEventListener('keyup', () => { player.dy = 0; });
+
+    // Mobiiliohjaus
+    const up = document.getElementById('btn-up'),
+          dn = document.getElementById('btn-down'),
+          sh = document.getElementById('btn-shoot');
+    up.addEventListener('touchstart', e => { e.preventDefault(); player.dy = -6; playTone(500, 0.02); });
+    dn.addEventListener('touchstart', e => { e.preventDefault(); player.dy = 6; });
+    sh.addEventListener('touchstart', e => {
+      e.preventDefault();
+      bullets.push(new Bullet(player.x + player.size/2, player.y));
+      playTone(1000, 0.02);
+    });
+    const stop = e => { e.preventDefault(); player.dy = 0; };
+    up.addEventListener('touchend', stop);
+    dn.addEventListener('touchend', stop);
+
+    // Canvas resize
+    window.addEventListener('resize', () => {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    });
+  })();
+  </script>
+</body>
+</html>
