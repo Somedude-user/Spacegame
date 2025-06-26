@@ -280,7 +280,7 @@
         this.speed = 8; this.size = 6;
         this.angle = angle;
         this.isEnemy = isEnemy;
-        this.dx = Math.cos(angle) * this.speed * (isEnemy ? -1 : 1);
+        this.dx = Math.cos(angle) * this.speed;
         this.dy = Math.sin(angle) * this.speed;
       }
       update() { 
