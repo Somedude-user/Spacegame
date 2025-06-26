@@ -19,15 +19,23 @@
       font-family:'Segoe UI',sans-serif; color:#ff0;
       font-size:18px; z-index:10;
     }
+
+    #game-stats {
+      position:absolute; top:90px; left:20px;
+      font-family:'Segoe UI',sans-serif; color:#0ff;
+      font-size:16px; z-index:10;
+    }
     
-    #nickname-modal, #game-over, #leaderboard-modal {
+    #nickname-modal, #game-over, #leaderboard-modal, #stats-modal {
       position:absolute; top:50%; left:50%;
       transform:translate(-50%, -50%);
       font-family:'Segoe UI',sans-serif;
-      color:#fff; background:rgba(0,0,0,0.9);
+      color:#fff; background:rgba(0,0,0,0.95);
       padding:30px; border-radius:12px;
       text-align:center; z-index:20;
       border: 2px solid #0ff;
+      max-width:90vw; max-height:90vh;
+      overflow-y:auto;
     }
     
     #nickname-modal input {
@@ -37,26 +45,92 @@
       max-width:200px;
     }
     
-    #nickname-modal button, #game-over button, #leaderboard-modal button {
+    #nickname-modal button, #game-over button, #leaderboard-modal button, #stats-modal button {
       margin:10px 5px; padding:10px 20px;
       font-size:16px; cursor:pointer;
       border-radius:5px; border:none;
       background:#0ff; color:#000;
     }
+
+    #nickname-modal button:hover, #game-over button:hover, #leaderboard-modal button:hover, #stats-modal button:hover {
+      background:#fff;
+    }
     
     #game-over { display:none; }
     #leaderboard-modal { display:none; }
+    #stats-modal { display:none; }
     
-    .leaderboard-list {
+    .leaderboard-list, .stats-content {
       text-align:left; margin:20px 0;
-      max-height:300px; overflow-y:auto;
+      max-height:400px; overflow-y:auto;
     }
     
     .leaderboard-entry {
-      padding:8px; margin:5px 0;
+      padding:12px; margin:8px 0;
       background:rgba(255,255,255,0.1);
-      border-radius:5px;
+      border-radius:8px;
       display:flex; justify-content:space-between;
+      align-items:center;
+    }
+
+    .leaderboard-entry.highlight {
+      background:rgba(0,255,255,0.2);
+      border:1px solid #0ff;
+    }
+
+    .leaderboard-rank {
+      font-weight:bold; color:#ff0;
+      min-width:30px;
+    }
+
+    .leaderboard-name {
+      flex:1; margin:0 15px;
+      font-weight:bold;
+    }
+
+    .leaderboard-score {
+      color:#0f0; font-weight:bold;
+    }
+
+    .leaderboard-details {
+      font-size:12px; color:#aaa;
+      margin-top:4px;
+    }
+
+    .stats-grid {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:15px;
+      margin:20px 0;
+    }
+
+    .stat-item {
+      background:rgba(255,255,255,0.1);
+      padding:15px;
+      border-radius:8px;
+      text-align:center;
+    }
+
+    .stat-value {
+      font-size:24px;
+      font-weight:bold;
+      color:#0ff;
+    }
+
+    .stat-label {
+      font-size:14px;
+      color:#aaa;
+      margin-top:5px;
+    }
+
+    .loading {
+      color:#ff0;
+      font-style:italic;
+    }
+
+    .error {
+      color:#f44;
+      font-style:italic;
     }
     
     .controls {
@@ -115,6 +189,17 @@
       0% { transform:scale(0); opacity:1; }
       100% { transform:scale(20); opacity:0; }
     }
+
+    @media (max-width: 768px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      #nickname-modal, #game-over, #leaderboard-modal, #stats-modal {
+        padding:20px;
+        margin:10px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -123,29 +208,53 @@
   <div id="nickname-modal">
     <h2>🚀 Space Dodger Shooter</h2>
     <p>Syötä pelaajanimesi:</p>
-    <input type="text" id="nickname-input" placeholder="Pelaajan nimi" maxlength="15">
+    <input type="text" id="nickname-input" placeholder="Pelaajan nimi" maxlength="20">
     <br>
     <button onclick="startGame()">Aloita peli</button>
-    <button onclick="showLeaderboard()">Tulokset</button>
+    <button onclick="showLeaderboard()">Globaali tulostaulu</button>
+    <button onclick="showStats()">Omat tilastot</button>
   </div>
 
   <!-- Game UI -->
   <div id="score" style="display:none;">Pisteet: 0</div>
   <div id="nuke-cooldown" style="display:none;"></div>
+  <div id="game-stats" style="display:none;">
+    <div>Viholliset: <span id="enemies-killed">0</span></div>
+    <div>Asteroidit: <span id="asteroids-destroyed">0</span></div>
+    <div>Ydinpommit: <span id="nukes-used">0</span></div>
+  </div>
   
   <!-- Game Over Modal -->
   <div id="game-over">
     <div id="final-score">Peli ohi!</div>
+    <div id="game-summary"></div>
     <button onclick="restartGame()">Pelaa uudelleen</button>
-    <button onclick="showLeaderboard()">Tulokset</button>
+    <button onclick="showLeaderboard()">Globaali tulostaulu</button>
+    <button onclick="showStats()">Omat tilastot</button>
   </div>
 
   <!-- Leaderboard Modal -->
   <div id="leaderboard-modal">
-    <h2>🏆 Tulostaulu</h2>
-    <div class="leaderboard-list" id="leaderboard-list"></div>
+    <h2>🏆 Globaali tulostaulu</h2>
+    <div class="leaderboard-list" id="leaderboard-list">
+      <div class="loading">Ladataan tuloksia...</div>
+    </div>
     <button onclick="hideLeaderboard()">Takaisin</button>
-    <button onclick="clearLeaderboard()">Tyhjennä tulokset</button>
+  </div>
+
+  <!-- Stats Modal -->
+  <div id="stats-modal">
+    <h2>📊 Omat tilastot</h2>
+    <div class="stats-content" id="stats-content">
+      <div class="loading">Ladataan tilastoja...</div>
+    </div>
+    <div id="recent-scores">
+      <h3>Viimeisimmät pelit</h3>
+      <div id="recent-scores-list">
+        <div class="loading">Ladataan...</div>
+      </div>
+    </div>
+    <button onclick="hideStats()">Takaisin</button>
   </div>
 
   <!-- Mobile Controls -->
@@ -159,10 +268,16 @@
 
   <canvas id="game" style="display:none;"></canvas>
 
-  <script>
-  (() => {
+  <script type="module">
+    import { SpaceGameDB } from './src/supabase.js';
+
     let playerName = '';
     let gameStarted = false;
+    let currentPlayer = null;
+    let gameStartTime = 0;
+    let enemiesKilled = 0;
+    let asteroidsDestroyed = 0;
+    let nukesUsed = 0;
     
     // Game elements
     const canvas = document.getElementById('game');
@@ -173,9 +288,11 @@
     // UI elements
     const nicknameModal = document.getElementById('nickname-modal');
     const leaderboardModal = document.getElementById('leaderboard-modal');
+    const statsModal = document.getElementById('stats-modal');
     const gameControls = document.getElementById('game-controls');
     const scoreEl = document.getElementById('score');
     const nukeCooldownEl = document.getElementById('nuke-cooldown');
+    const gameStatsEl = document.getElementById('game-stats');
     const overEl = document.getElementById('game-over');
     const finalEl = document.getElementById('final-score');
 
@@ -184,59 +301,184 @@
     let nukeCooldownTime = 0;
     const NUKE_COOLDOWN = 10000; // 10 seconds
 
-    // Leaderboard functions
-    function getLeaderboard() {
-      const saved = localStorage.getItem('spaceShooterLeaderboard');
-      return saved ? JSON.parse(saved) : [];
-    }
-
-    function saveScore(name, score) {
-      const leaderboard = getLeaderboard();
-      leaderboard.push({ name, score, date: new Date().toLocaleDateString() });
-      leaderboard.sort((a, b) => b.score - a.score);
-      leaderboard.splice(10); // Keep only top 10
-      localStorage.setItem('spaceShooterLeaderboard', JSON.stringify(leaderboard));
-    }
-
-    function displayLeaderboard() {
-      const leaderboard = getLeaderboard();
-      const listEl = document.getElementById('leaderboard-list');
-      
-      if (leaderboard.length === 0) {
-        listEl.innerHTML = '<p style="text-align:center; color:#888;">Ei tuloksia vielä</p>';
-        return;
+    // Initialize authentication
+    async function initAuth() {
+      try {
+        let user = await SpaceGameDB.getCurrentUser();
+        if (!user) {
+          await SpaceGameDB.signInAnonymously();
+        }
+      } catch (error) {
+        console.error('Auth initialization failed:', error);
       }
-      
-      listEl.innerHTML = leaderboard.map((entry, index) => 
-        `<div class="leaderboard-entry">
-          <span>${index + 1}. ${entry.name}</span>
-          <span>${entry.score} pistettä</span>
-        </div>`
-      ).join('');
+    }
+
+    // Initialize app
+    initAuth();
+
+    // Update game stats display
+    function updateGameStatsDisplay() {
+      document.getElementById('enemies-killed').textContent = enemiesKilled;
+      document.getElementById('asteroids-destroyed').textContent = asteroidsDestroyed;
+      document.getElementById('nukes-used').textContent = nukesUsed;
     }
 
     // Modal functions
-    window.startGame = function() {
+    window.startGame = async function() {
       const nameInput = document.getElementById('nickname-input');
       playerName = nameInput.value.trim() || 'Pelaaja';
       
-      nicknameModal.style.display = 'none';
-      canvas.style.display = 'block';
-      scoreEl.style.display = 'block';
-      nukeCooldownEl.style.display = 'block';
-      gameControls.style.display = 'flex';
-      
-      canvas.width = W;
-      canvas.height = H;
-      gameStarted = true;
-      initGame();
+      try {
+        currentPlayer = await SpaceGameDB.getOrCreatePlayer(playerName);
+        
+        nicknameModal.style.display = 'none';
+        canvas.style.display = 'block';
+        scoreEl.style.display = 'block';
+        nukeCooldownEl.style.display = 'block';
+        gameStatsEl.style.display = 'block';
+        gameControls.style.display = 'flex';
+        
+        canvas.width = W;
+        canvas.height = H;
+        gameStarted = true;
+        gameStartTime = Date.now();
+        enemiesKilled = 0;
+        asteroidsDestroyed = 0;
+        nukesUsed = 0;
+        updateGameStatsDisplay();
+        
+        initGame();
+      } catch (error) {
+        console.error('Failed to start game:', error);
+        alert('Virhe pelin aloituksessa. Yritä uudelleen.');
+      }
     };
 
-    window.showLeaderboard = function() {
-      displayLeaderboard();
+    window.showLeaderboard = async function() {
       nicknameModal.style.display = 'none';
       overEl.style.display = 'none';
+      statsModal.style.display = 'none';
       leaderboardModal.style.display = 'block';
+      
+      const listEl = document.getElementById('leaderboard-list');
+      listEl.innerHTML = '<div class="loading">Ladataan tuloksia...</div>';
+      
+      try {
+        const leaderboard = await SpaceGameDB.getGlobalLeaderboard(20);
+        
+        if (leaderboard.length === 0) {
+          listEl.innerHTML = '<p style="text-align:center; color:#888;">Ei tuloksia vielä</p>';
+          return;
+        }
+        
+        listEl.innerHTML = leaderboard.map((entry, index) => {
+          const isCurrentPlayer = currentPlayer && entry.nickname === currentPlayer.nickname;
+          return `<div class="leaderboard-entry ${isCurrentPlayer ? 'highlight' : ''}">
+            <div class="leaderboard-rank">${index + 1}.</div>
+            <div class="leaderboard-name">
+              ${entry.nickname}
+              <div class="leaderboard-details">
+                ${entry.enemiesKilled} vihollista • ${entry.asteroidsDestroyed} asteroidia • ${entry.date}
+              </div>
+            </div>
+            <div class="leaderboard-score">${entry.score}</div>
+          </div>`;
+        }).join('');
+      } catch (error) {
+        console.error('Failed to load leaderboard:', error);
+        listEl.innerHTML = '<div class="error">Virhe tulosten latauksessa</div>';
+      }
+    };
+
+    window.showStats = async function() {
+      if (!currentPlayer) {
+        const nameInput = document.getElementById('nickname-input');
+        const name = nameInput.value.trim() || 'Pelaaja';
+        try {
+          currentPlayer = await SpaceGameDB.getOrCreatePlayer(name);
+        } catch (error) {
+          console.error('Failed to get player:', error);
+          alert('Virhe pelaajatietojen haussa');
+          return;
+        }
+      }
+
+      nicknameModal.style.display = 'none';
+      overEl.style.display = 'none';
+      leaderboardModal.style.display = 'none';
+      statsModal.style.display = 'block';
+      
+      const statsEl = document.getElementById('stats-content');
+      const recentEl = document.getElementById('recent-scores-list');
+      
+      statsEl.innerHTML = '<div class="loading">Ladataan tilastoja...</div>';
+      recentEl.innerHTML = '<div class="loading">Ladataan...</div>';
+      
+      try {
+        const [stats, recentScores] = await Promise.all([
+          SpaceGameDB.getPlayerStats(currentPlayer.id),
+          SpaceGameDB.getPlayerRecentScores(currentPlayer.id, 10)
+        ]);
+        
+        // Format playtime
+        const hours = Math.floor(stats.totalPlaytime / 3600);
+        const minutes = Math.floor((stats.totalPlaytime % 3600) / 60);
+        const playtimeStr = hours > 0 ? `${hours}h ${minutes}min` : `${minutes}min`;
+        
+        statsEl.innerHTML = `
+          <div class="stats-grid">
+            <div class="stat-item">
+              <div class="stat-value">${stats.totalGames}</div>
+              <div class="stat-label">Pelejä pelattu</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${stats.bestScore}</div>
+              <div class="stat-label">Paras tulos</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${stats.averageScore}</div>
+              <div class="stat-label">Keskiarvo</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${stats.totalScore.toLocaleString()}</div>
+              <div class="stat-label">Pisteitä yhteensä</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${stats.totalEnemiesKilled}</div>
+              <div class="stat-label">Vihollisia tuhottu</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${stats.totalAsteroidsDestroyed}</div>
+              <div class="stat-label">Asteroideja tuhottu</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${stats.totalNukesUsed}</div>
+              <div class="stat-label">Ydinpommeja käytetty</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${playtimeStr}</div>
+              <div class="stat-label">Peliaikaa</div>
+            </div>
+          </div>
+        `;
+        
+        if (recentScores.length === 0) {
+          recentEl.innerHTML = '<p style="text-align:center; color:#888;">Ei pelejä vielä</p>';
+        } else {
+          recentEl.innerHTML = recentScores.map(score => `
+            <div class="leaderboard-entry">
+              <div class="leaderboard-score">${score.score}</div>
+              <div class="leaderboard-details">
+                ${score.enemiesKilled} vihollista • ${score.asteroidsDestroyed} asteroidia • ${score.date}
+              </div>
+            </div>
+          `).join('');
+        }
+      } catch (error) {
+        console.error('Failed to load stats:', error);
+        statsEl.innerHTML = '<div class="error">Virhe tilastojen latauksessa</div>';
+        recentEl.innerHTML = '<div class="error">Virhe</div>';
+      }
     };
 
     window.hideLeaderboard = function() {
@@ -248,10 +490,12 @@
       }
     };
 
-    window.clearLeaderboard = function() {
-      if (confirm('Haluatko varmasti tyhjentää kaikki tulokset?')) {
-        localStorage.removeItem('spaceShooterLeaderboard');
-        displayLeaderboard();
+    window.hideStats = function() {
+      statsModal.style.display = 'none';
+      if (gameStarted) {
+        overEl.style.display = 'block';
+      } else {
+        nicknameModal.style.display = 'block';
       }
     };
 
@@ -501,7 +745,12 @@
       enemyBullets = []; // Clear enemy bullets too
       
       score += destroyedAsteroids * 5 + destroyedEnemies * 10; // More points for enemies
+      asteroidsDestroyed += destroyedAsteroids;
+      enemiesKilled += destroyedEnemies;
+      nukesUsed++;
+      
       scoreEl.innerText = 'Pisteet: ' + score;
+      updateGameStatsDisplay();
       
       // Start cooldown
       nukeAvailable = false;
@@ -542,6 +791,42 @@
       enemies.push(new Enemy(type));
     }
 
+    async function endGame() {
+      over = true;
+      const gameDuration = Math.floor((Date.now() - gameStartTime) / 1000);
+      
+      try {
+        await SpaceGameDB.saveScore(currentPlayer.id, {
+          score,
+          duration: gameDuration,
+          enemiesKilled,
+          asteroidsDestroyed,
+          nukesUsed
+        });
+        
+        const minutes = Math.floor(gameDuration / 60);
+        const seconds = gameDuration % 60;
+        const timeStr = minutes > 0 ? `${minutes}min ${seconds}s` : `${seconds}s`;
+        
+        finalEl.innerHTML = `<h3>Peli ohi, ${playerName}!</h3><p>Pisteet: ${score}</p>`;
+        document.getElementById('game-summary').innerHTML = `
+          <p>Pelikaika: ${timeStr}</p>
+          <p>Vihollisia tuhottu: ${enemiesKilled}</p>
+          <p>Asteroideja tuhottu: ${asteroidsDestroyed}</p>
+          <p>Ydinpommeja käytetty: ${nukesUsed}</p>
+          <p style="color:#0f0; margin-top:10px;">Tulos tallennettu!</p>
+        `;
+      } catch (error) {
+        console.error('Failed to save score:', error);
+        finalEl.innerHTML = `<h3>Peli ohi, ${playerName}!</h3><p>Pisteet: ${score}</p>`;
+        document.getElementById('game-summary').innerHTML = `
+          <p style="color:#f44;">Virhe tuloksen tallentamisessa</p>
+        `;
+      }
+      
+      overEl.style.display = 'block';
+    }
+
     function loop() {
       if (over) return;
       ctx.clearRect(0, 0, W, H);
@@ -573,10 +858,7 @@
         const dx = b.x - player.x;
         const dy = b.y - player.y;
         if (Math.hypot(dx, dy) < b.size + player.size/2) {
-          over = true;
-          saveScore(playerName, score);
-          finalEl.innerHTML = `<h3>Peli ohi, ${playerName}!</h3><p>Pisteet: ${score}</p>`;
-          overEl.style.display = 'block';
+          endGame();
         }
       });
 
@@ -599,17 +881,16 @@
             asteroids.splice(i, 1);
             bullets.splice(bi, 1);
             score += 2;
+            asteroidsDestroyed++;
             scoreEl.innerText = 'Pisteet: ' + score;
+            updateGameStatsDisplay();
           }
         });
 
         // Player collision
         const dxp = player.x - a.x, dyp = player.y - a.y;
         if (Math.hypot(dxp, dyp) < a.size/2 + player.size/2) {
-          over = true;
-          saveScore(playerName, score);
-          finalEl.innerHTML = `<h3>Peli ohi, ${playerName}!</h3><p>Pisteet: ${score}</p>`;
-          overEl.style.display = 'block';
+          endGame();
         }
 
         // Off screen
@@ -633,7 +914,9 @@
             if (enemy.takeDamage()) {
               enemies.splice(i, 1);
               score += enemy.type === 'large' ? 15 : 8; // More points for large enemies
+              enemiesKilled++;
               scoreEl.innerText = 'Pisteet: ' + score;
+              updateGameStatsDisplay();
             }
           }
         });
@@ -641,10 +924,7 @@
         // Player collision
         const dxp = player.x - enemy.x, dyp = player.y - enemy.y;
         if (Math.hypot(dxp, dyp) < enemy.size/2 + player.size/2) {
-          over = true;
-          saveScore(playerName, score);
-          finalEl.innerHTML = `<h3>Peli ohi, ${playerName}!</h3><p>Pisteet: ${score}</p>`;
-          overEl.style.display = 'block';
+          endGame();
         }
 
         // Off screen
@@ -739,8 +1019,6 @@
     document.getElementById('nickname-input').addEventListener('keypress', e => {
       if (e.key === 'Enter') startGame();
     });
-
-  })();
   </script>
 </body>
 </html>

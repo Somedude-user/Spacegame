@@ -1,14 +1,17 @@
 {
   "name": "space-dodger-shooter",
   "version": "1.0.0",
-  "description": "Space Dodger Shooter game with music",
+  "description": "Space Dodger Shooter game with Supabase integration",
   "main": "index.html",
   "scripts": {
     "build": "mkdir -p dist && cp index.html dist/",
     "dev": "python3 -m http.server 3000",
     "start": "python3 -m http.server 3000"
   },
-  "keywords": ["game", "space", "shooter"],
+  "keywords": ["game", "space", "shooter", "supabase"],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0"
+  }
 }
