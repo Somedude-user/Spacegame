@@ -1,0 +1,14 @@
+{
+  "name": "space-dodger-shooter",
+  "version": "1.0.0",
+  "description": "Space Dodger Shooter game with music",
+  "main": "index.html",
+  "scripts": {
+    "build": "mkdir -p dist && cp index.html dist/",
+    "dev": "python3 -m http.server 3000",
+    "start": "python3 -m http.server 3000"
+  },
+  "keywords": ["game", "space", "shooter"],
+  "author": "",
+  "license": "MIT"
+}
