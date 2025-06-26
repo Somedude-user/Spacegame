@@ -53,6 +53,10 @@
     #mute-btn.muted {
       background-image:url('speaker-off.png');
     }
+    .spread-btn {
+      background:rgba(255,100,100,0.3) !important;
+      border-color:#ff6666 !important;
+    }
   </style>
 </head>
 <body>
@@ -67,11 +71,12 @@
     <button onclick="location.reload()">Pelaa uudelleen</button>
   </div>
 
-  <!-- Kännykkäkontrollit: Ylös, Alas, Ampu -->
+  <!-- Kännykkäkontrollit: Ylös, Alas, Ampu, Sarjatuli -->
   <div class="controls">
     <div class="btn" id="btn-up">⬆️</div>
     <div class="btn" id="btn-down">⬇️</div>
     <div class="btn" id="btn-shoot">🔫</div>
+    <div class="btn spread-btn" id="btn-spread">💥</div>
   </div>
 
   <canvas id="game"></canvas>
@@ -127,7 +132,7 @@
       ));
     }
 
-    // Pelaaja-alus
+    // Pelaaja-alus (parannettu raketti)
     const player = {
       x: 100, y: H/2, size: 30, dy: 0,
       update() {
@@ -136,11 +141,39 @@
         if (this.y > H - this.size) this.y = H - this.size;
       },
       draw() {
+        // Raketin runko
         ctx.fillStyle = '#0ff';
         ctx.beginPath();
-        ctx.moveTo(this.x, this.y);
-        ctx.lineTo(this.x - this.size, this.y - this.size/2);
-        ctx.lineTo(this.x - this.size, this.y + this.size/2);
+        ctx.moveTo(this.x + this.size/2, this.y);
+        ctx.lineTo(this.x - this.size/2, this.y - this.size/3);
+        ctx.lineTo(this.x - this.size/3, this.y);
+        ctx.lineTo(this.x - this.size/2, this.y + this.size/3);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Raketin kärki
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.moveTo(this.x + this.size/2, this.y);
+        ctx.lineTo(this.x + this.size/4, this.y - this.size/6);
+        ctx.lineTo(this.x + this.size/4, this.y + this.size/6);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Liekit takana
+        ctx.fillStyle = '#f80';
+        ctx.beginPath();
+        ctx.moveTo(this.x - this.size/3, this.y - this.size/6);
+        ctx.lineTo(this.x - this.size, this.y);
+        ctx.lineTo(this.x - this.size/3, this.y + this.size/6);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.fillStyle = '#ff0';
+        ctx.beginPath();
+        ctx.moveTo(this.x - this.size/3, this.y - this.size/8);
+        ctx.lineTo(this.x - this.size*0.8, this.y);
+        ctx.lineTo(this.x - this.size/3, this.y + this.size/8);
         ctx.closePath();
         ctx.fill();
       }
@@ -149,17 +182,31 @@
     // Luodit
     const bullets = [];
     class Bullet {
-      constructor(x,y) {
+      constructor(x, y, angle = 0) {
         this.x = x; this.y = y;
         this.speed = 8; this.size = 6;
+        this.angle = angle;
+        this.dx = Math.cos(angle) * this.speed;
+        this.dy = Math.sin(angle) * this.speed;
       }
-      update() { this.x += this.speed; }
+      update() { 
+        this.x += this.dx; 
+        this.y += this.dy;
+      }
       draw() {
         ctx.fillStyle = '#ff0';
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
         ctx.fill();
       }
+    }
+
+    // Sarjatuli-funktio
+    function fireSpreadShot(x, y) {
+      const angles = [-0.4, -0.2, 0, 0.2, 0.4]; // 5 luotia eri kulmissa
+      angles.forEach(angle => {
+        bullets.push(new Bullet(x, y, angle));
+      });
     }
 
     // Asteroidit
@@ -205,7 +252,7 @@
       // Luodit
       bullets.forEach((b, i) => {
         b.update(); b.draw();
-        if (b.x > W + b.size) bullets.splice(i, 1);
+        if (b.x > W + b.size || b.y < 0 || b.y > H) bullets.splice(i, 1);
       });
 
       // Uusia asteroideja
@@ -255,30 +302,42 @@
     }
     loop();
 
-    // Näppäimistöohjaus
+    // Näppäimistöohjaus (2x nopeampi liike)
     document.addEventListener('keydown', e => {
       if (e.code === 'ArrowUp' || e.code === 'Space') {
-        player.dy = -6; playTone(500, 0.02);
+        player.dy = -12; playTone(500, 0.02); // 2x nopeampi
       }
-      if (e.code === 'ArrowDown') player.dy = 6;
+      if (e.code === 'ArrowDown') player.dy = 12; // 2x nopeampi
       if (e.code === 'KeyX') {
         bullets.push(new Bullet(player.x + player.size/2, player.y));
         playTone(1000, 0.02);
       }
+      if (e.code === 'KeyC') { // Sarjatuli C-näppäimellä
+        fireSpreadShot(player.x + player.size/2, player.y);
+        playTone(1200, 0.1);
+      }
     });
     document.addEventListener('keyup', () => { player.dy = 0; });
 
-    // Mobiiliohjaus
+    // Mobiiliohjaus (2x nopeampi liike)
     const up = document.getElementById('btn-up'),
           dn = document.getElementById('btn-down'),
-          sh = document.getElementById('btn-shoot');
-    up.addEventListener('touchstart', e => { e.preventDefault(); player.dy = -6; playTone(500, 0.02); });
-    dn.addEventListener('touchstart', e => { e.preventDefault(); player.dy = 6; });
+          sh = document.getElementById('btn-shoot'),
+          sp = document.getElementById('btn-spread');
+    
+    up.addEventListener('touchstart', e => { e.preventDefault(); player.dy = -12; playTone(500, 0.02); }); // 2x nopeampi
+    dn.addEventListener('touchstart', e => { e.preventDefault(); player.dy = 12; }); // 2x nopeampi
     sh.addEventListener('touchstart', e => {
       e.preventDefault();
       bullets.push(new Bullet(player.x + player.size/2, player.y));
       playTone(1000, 0.02);
     });
+    sp.addEventListener('touchstart', e => {
+      e.preventDefault();
+      fireSpreadShot(player.x + player.size/2, player.y);
+      playTone(1200, 0.1);
+    });
+    
     const stop = e => { e.preventDefault(); player.dy = 0; };
     up.addEventListener('touchend', stop);
     dn.addEventListener('touchend', stop);
