@@ -2,113 +2,264 @@
 <html lang="fi">
 <head>
   <meta charset="UTF-8">
-  <title>🚀 Space Dodger Shooter + Music</title>
+  <title>🚀 Space Dodger Shooter</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     html, body { width:100%; height:100%; overflow:hidden; background:#000; }
     canvas { display:block; }
+    
     #score {
       position:absolute; top:10px; left:20px;
       font-family:'Segoe UI',sans-serif; color:#0f0;
       font-size:24px; z-index:10;
     }
-    #game-over {
+    
+    #nuke-cooldown {
+      position:absolute; top:50px; left:20px;
+      font-family:'Segoe UI',sans-serif; color:#ff0;
+      font-size:18px; z-index:10;
+    }
+    
+    #nickname-modal, #game-over, #leaderboard-modal {
       position:absolute; top:50%; left:50%;
       transform:translate(-50%, -50%);
       font-family:'Segoe UI',sans-serif;
-      color:#fff; background:rgba(0,0,0,0.8);
-      padding:20px; border-radius:8px;
-      text-align:center; display:none; z-index:10;
+      color:#fff; background:rgba(0,0,0,0.9);
+      padding:30px; border-radius:12px;
+      text-align:center; z-index:20;
+      border: 2px solid #0ff;
     }
-    #game-over button {
-      margin-top:12px; padding:8px 16px;
+    
+    #nickname-modal input {
+      margin:15px 0; padding:10px;
+      font-size:18px; border-radius:5px;
+      border:none; text-align:center;
+      max-width:200px;
+    }
+    
+    #nickname-modal button, #game-over button, #leaderboard-modal button {
+      margin:10px 5px; padding:10px 20px;
       font-size:16px; cursor:pointer;
+      border-radius:5px; border:none;
+      background:#0ff; color:#000;
     }
+    
+    #game-over { display:none; }
+    #leaderboard-modal { display:none; }
+    
+    .leaderboard-list {
+      text-align:left; margin:20px 0;
+      max-height:300px; overflow-y:auto;
+    }
+    
+    .leaderboard-entry {
+      padding:8px; margin:5px 0;
+      background:rgba(255,255,255,0.1);
+      border-radius:5px;
+      display:flex; justify-content:space-between;
+    }
+    
     .controls {
       position:absolute; bottom:20px; left:50%;
       transform:translateX(-50%);
-      display:flex; gap:80px; /* Suurempi väli nappeihin */
+      display:flex; gap:60px;
       z-index:10;
     }
+    
     .btn {
-      width:100px; height:100px; /* Isompi nappi */
+      width:80px; height:80px;
       background:rgba(255,255,255,0.2);
       border:2px solid #fff; border-radius:50%;
       display:flex; align-items:center;
-      justify-content:center; font-size:48px; /* Isompi emoteksti */
+      justify-content:center; font-size:36px;
       user-select:none; touch-action:none;
+      cursor:pointer;
     }
+    
     .btn:active {
       background:#fff; color:#000;
     }
-    /* Piilota oletusäänentoiston kontrollit */
-    audio { display:none; }
-    /* Pieni äänikuvake mykistyspainikkeelle */
-    #mute-btn {
-      position:absolute; top:10px; right:20px;
-      width:32px; height:32px;
-      background:url('speaker-on.png') no-repeat center/contain;
-      cursor:pointer; z-index:10;
-    }
-    #mute-btn.muted {
-      background-image:url('speaker-off.png');
-    }
+    
     .spread-btn {
       background:rgba(255,100,100,0.3) !important;
       border-color:#ff6666 !important;
+    }
+    
+    .nuke-btn {
+      background:rgba(255,255,0,0.4) !important;
+      border-color:#ffff00 !important;
+      animation:pulse 2s infinite;
+    }
+    
+    .nuke-btn.disabled {
+      background:rgba(100,100,100,0.3) !important;
+      border-color:#666 !important;
+      animation:none;
+      opacity:0.5;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform:scale(1); }
+      50% { transform:scale(1.1); }
+    }
+    
+    .nuke-explosion {
+      position:absolute;
+      border-radius:50%;
+      background:radial-gradient(circle, #fff 0%, #ff0 30%, #f80 60%, transparent 100%);
+      pointer-events:none;
+      animation:explode 1s ease-out forwards;
+    }
+    
+    @keyframes explode {
+      0% { transform:scale(0); opacity:1; }
+      100% { transform:scale(20); opacity:0; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Taustamusiikki (loop) -->
-  <audio id="bgMusic" src="background.mp3" loop></audio>
-  <div id="mute-btn"></div>
-
-  <div id="score">Pisteet: 0</div>
-  <div id="game-over">
-    <div id="final-score">Peli ohi!</div>
-    <button onclick="location.reload()">Pelaa uudelleen</button>
+  <!-- Nickname Modal -->
+  <div id="nickname-modal">
+    <h2>🚀 Space Dodger Shooter</h2>
+    <p>Syötä pelaajanimesi:</p>
+    <input type="text" id="nickname-input" placeholder="Pelaajan nimi" maxlength="15">
+    <br>
+    <button onclick="startGame()">Aloita peli</button>
+    <button onclick="showLeaderboard()">Tulokset</button>
   </div>
 
-  <!-- Kännykkäkontrollit: Ylös, Alas, Ampu, Sarjatuli -->
-  <div class="controls">
+  <!-- Game UI -->
+  <div id="score" style="display:none;">Pisteet: 0</div>
+  <div id="nuke-cooldown" style="display:none;"></div>
+  
+  <!-- Game Over Modal -->
+  <div id="game-over">
+    <div id="final-score">Peli ohi!</div>
+    <button onclick="restartGame()">Pelaa uudelleen</button>
+    <button onclick="showLeaderboard()">Tulokset</button>
+  </div>
+
+  <!-- Leaderboard Modal -->
+  <div id="leaderboard-modal">
+    <h2>🏆 Tulostaulu</h2>
+    <div class="leaderboard-list" id="leaderboard-list"></div>
+    <button onclick="hideLeaderboard()">Takaisin</button>
+    <button onclick="clearLeaderboard()">Tyhjennä tulokset</button>
+  </div>
+
+  <!-- Mobile Controls -->
+  <div class="controls" style="display:none;" id="game-controls">
     <div class="btn" id="btn-up">⬆️</div>
     <div class="btn" id="btn-down">⬇️</div>
     <div class="btn" id="btn-shoot">🔫</div>
     <div class="btn spread-btn" id="btn-spread">💥</div>
+    <div class="btn nuke-btn" id="btn-nuke">☢️</div>
   </div>
 
-  <canvas id="game"></canvas>
+  <canvas id="game" style="display:none;"></canvas>
 
   <script>
   (() => {
-    const bgMusic = document.getElementById('bgMusic');
-    const muteBtn = document.getElementById('mute-btn');
-    let muted = false;
-
-    // Käynnistä musiikki ensimmäisestä kosketuksesta/klikistä
-    function unlockAudio() {
-      bgMusic.play().catch(()=>{});
-      document.body.removeEventListener('touchstart', unlockAudio);
-      document.body.removeEventListener('click', unlockAudio);
-    }
-    document.body.addEventListener('touchstart', unlockAudio, { once: true });
-    document.body.addEventListener('click', unlockAudio, { once: true });
-
-    // Mykistys
-    muteBtn.addEventListener('click', () => {
-      muted = !muted;
-      bgMusic.muted = muted;
-      muteBtn.classList.toggle('muted', muted);
-    });
-
+    let playerName = '';
+    let gameStarted = false;
+    
+    // Game elements
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
-    let W = canvas.width = window.innerWidth;
-    let H = canvas.height = window.innerHeight;
+    let W = window.innerWidth;
+    let H = window.innerHeight;
+    
+    // UI elements
+    const nicknameModal = document.getElementById('nickname-modal');
+    const leaderboardModal = document.getElementById('leaderboard-modal');
+    const gameControls = document.getElementById('game-controls');
+    const scoreEl = document.getElementById('score');
+    const nukeCooldownEl = document.getElementById('nuke-cooldown');
+    const overEl = document.getElementById('game-over');
+    const finalEl = document.getElementById('final-score');
 
-    // Taustatähdet
+    // Nuclear bomb system
+    let nukeAvailable = true;
+    let nukeCooldownTime = 0;
+    const NUKE_COOLDOWN = 10000; // 10 seconds
+
+    // Leaderboard functions
+    function getLeaderboard() {
+      const saved = localStorage.getItem('spaceShooterLeaderboard');
+      return saved ? JSON.parse(saved) : [];
+    }
+
+    function saveScore(name, score) {
+      const leaderboard = getLeaderboard();
+      leaderboard.push({ name, score, date: new Date().toLocaleDateString() });
+      leaderboard.sort((a, b) => b.score - a.score);
+      leaderboard.splice(10); // Keep only top 10
+      localStorage.setItem('spaceShooterLeaderboard', JSON.stringify(leaderboard));
+    }
+
+    function displayLeaderboard() {
+      const leaderboard = getLeaderboard();
+      const listEl = document.getElementById('leaderboard-list');
+      
+      if (leaderboard.length === 0) {
+        listEl.innerHTML = '<p style="text-align:center; color:#888;">Ei tuloksia vielä</p>';
+        return;
+      }
+      
+      listEl.innerHTML = leaderboard.map((entry, index) => 
+        `<div class="leaderboard-entry">
+          <span>${index + 1}. ${entry.name}</span>
+          <span>${entry.score} pistettä</span>
+        </div>`
+      ).join('');
+    }
+
+    // Modal functions
+    window.startGame = function() {
+      const nameInput = document.getElementById('nickname-input');
+      playerName = nameInput.value.trim() || 'Pelaaja';
+      
+      nicknameModal.style.display = 'none';
+      canvas.style.display = 'block';
+      scoreEl.style.display = 'block';
+      nukeCooldownEl.style.display = 'block';
+      gameControls.style.display = 'flex';
+      
+      canvas.width = W;
+      canvas.height = H;
+      gameStarted = true;
+      initGame();
+    };
+
+    window.showLeaderboard = function() {
+      displayLeaderboard();
+      nicknameModal.style.display = 'none';
+      overEl.style.display = 'none';
+      leaderboardModal.style.display = 'block';
+    };
+
+    window.hideLeaderboard = function() {
+      leaderboardModal.style.display = 'none';
+      if (gameStarted) {
+        overEl.style.display = 'block';
+      } else {
+        nicknameModal.style.display = 'block';
+      }
+    };
+
+    window.clearLeaderboard = function() {
+      if (confirm('Haluatko varmasti tyhjentää kaikki tulokset?')) {
+        localStorage.removeItem('spaceShooterLeaderboard');
+        displayLeaderboard();
+      }
+    };
+
+    window.restartGame = function() {
+      location.reload();
+    };
+
+    // Game objects
     class Star {
       constructor(speed, size, x, y){
         this.x = x; this.y = y; this.z = size; this.speed = speed;
@@ -122,65 +273,7 @@
         ctx.fillRect(this.x, this.y, this.z, this.z);
       }
     }
-    const stars = [];
-    for (let i = 0; i < 200; i++) {
-      stars.push(new Star(
-        Math.random()*0.6+0.2,
-        Math.random()*2+1,
-        Math.random()*W,
-        Math.random()*H
-      ));
-    }
 
-    // Pelaaja-alus (parannettu raketti)
-    const player = {
-      x: 100, y: H/2, size: 30, dy: 0,
-      update() {
-        this.y += this.dy;
-        if (this.y < this.size) this.y = this.size;
-        if (this.y > H - this.size) this.y = H - this.size;
-      },
-      draw() {
-        // Raketin runko
-        ctx.fillStyle = '#0ff';
-        ctx.beginPath();
-        ctx.moveTo(this.x + this.size/2, this.y);
-        ctx.lineTo(this.x - this.size/2, this.y - this.size/3);
-        ctx.lineTo(this.x - this.size/3, this.y);
-        ctx.lineTo(this.x - this.size/2, this.y + this.size/3);
-        ctx.closePath();
-        ctx.fill();
-        
-        // Raketin kärki
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.moveTo(this.x + this.size/2, this.y);
-        ctx.lineTo(this.x + this.size/4, this.y - this.size/6);
-        ctx.lineTo(this.x + this.size/4, this.y + this.size/6);
-        ctx.closePath();
-        ctx.fill();
-        
-        // Liekit takana
-        ctx.fillStyle = '#f80';
-        ctx.beginPath();
-        ctx.moveTo(this.x - this.size/3, this.y - this.size/6);
-        ctx.lineTo(this.x - this.size, this.y);
-        ctx.lineTo(this.x - this.size/3, this.y + this.size/6);
-        ctx.closePath();
-        ctx.fill();
-        
-        ctx.fillStyle = '#ff0';
-        ctx.beginPath();
-        ctx.moveTo(this.x - this.size/3, this.y - this.size/8);
-        ctx.lineTo(this.x - this.size*0.8, this.y);
-        ctx.lineTo(this.x - this.size/3, this.y + this.size/8);
-        ctx.closePath();
-        ctx.fill();
-      }
-    };
-
-    // Luodit
-    const bullets = [];
     class Bullet {
       constructor(x, y, angle = 0) {
         this.x = x; this.y = y;
@@ -201,16 +294,142 @@
       }
     }
 
-    // Sarjatuli-funktio
+    // Game variables
+    let stars = [];
+    let bullets = [];
+    let asteroids = [];
+    let score = 0;
+    let over = false;
+    let frame = 0;
+
+    const player = {
+      x: 100, y: H/2, size: 30, dy: 0,
+      update() {
+        this.y += this.dy;
+        if (this.y < this.size) this.y = this.size;
+        if (this.y > H - this.size) this.y = H - this.size;
+      },
+      draw() {
+        // Rocket body
+        ctx.fillStyle = '#0ff';
+        ctx.beginPath();
+        ctx.moveTo(this.x + this.size/2, this.y);
+        ctx.lineTo(this.x - this.size/2, this.y - this.size/3);
+        ctx.lineTo(this.x - this.size/3, this.y);
+        ctx.lineTo(this.x - this.size/2, this.y + this.size/3);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Rocket tip
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.moveTo(this.x + this.size/2, this.y);
+        ctx.lineTo(this.x + this.size/4, this.y - this.size/6);
+        ctx.lineTo(this.x + this.size/4, this.y + this.size/6);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Flames
+        ctx.fillStyle = '#f80';
+        ctx.beginPath();
+        ctx.moveTo(this.x - this.size/3, this.y - this.size/6);
+        ctx.lineTo(this.x - this.size, this.y);
+        ctx.lineTo(this.x - this.size/3, this.y + this.size/6);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.fillStyle = '#ff0';
+        ctx.beginPath();
+        ctx.moveTo(this.x - this.size/3, this.y - this.size/8);
+        ctx.lineTo(this.x - this.size*0.8, this.y);
+        ctx.lineTo(this.x - this.size/3, this.y + this.size/8);
+        ctx.closePath();
+        ctx.fill();
+      }
+    };
+
+    function initGame() {
+      // Initialize stars
+      stars = [];
+      for (let i = 0; i < 200; i++) {
+        stars.push(new Star(
+          Math.random()*0.6+0.2,
+          Math.random()*2+1,
+          Math.random()*W,
+          Math.random()*H
+        ));
+      }
+      
+      // Reset game state
+      bullets = [];
+      asteroids = [];
+      score = 0;
+      over = false;
+      frame = 0;
+      nukeAvailable = true;
+      nukeCooldownTime = 0;
+      
+      player.x = 100;
+      player.y = H/2;
+      player.dy = 0;
+      
+      loop();
+    }
+
     function fireSpreadShot(x, y) {
-      const angles = [-0.4, -0.2, 0, 0.2, 0.4]; // 5 luotia eri kulmissa
+      const angles = [-0.4, -0.2, 0, 0.2, 0.4];
       angles.forEach(angle => {
         bullets.push(new Bullet(x, y, angle));
       });
     }
 
-    // Asteroidit
-    const asteroids = [];
+    function fireNuke() {
+      if (!nukeAvailable) return;
+      
+      // Create visual explosion effect
+      const explosion = document.createElement('div');
+      explosion.className = 'nuke-explosion';
+      explosion.style.left = '50%';
+      explosion.style.top = '50%';
+      explosion.style.width = '100px';
+      explosion.style.height = '100px';
+      explosion.style.marginLeft = '-50px';
+      explosion.style.marginTop = '-50px';
+      document.body.appendChild(explosion);
+      
+      setTimeout(() => explosion.remove(), 1000);
+      
+      // Destroy all asteroids
+      const destroyedCount = asteroids.length;
+      asteroids = [];
+      score += destroyedCount * 5; // Bonus points for nuke
+      scoreEl.innerText = 'Pisteet: ' + score;
+      
+      // Start cooldown
+      nukeAvailable = false;
+      nukeCooldownTime = Date.now() + NUKE_COOLDOWN;
+      
+      // Update nuke button
+      const nukeBtn = document.getElementById('btn-nuke');
+      nukeBtn.classList.add('disabled');
+    }
+
+    function updateNukeCooldown() {
+      if (!nukeAvailable) {
+        const remaining = Math.max(0, nukeCooldownTime - Date.now());
+        if (remaining > 0) {
+          nukeCooldownEl.innerText = `Ydinpommi: ${Math.ceil(remaining/1000)}s`;
+        } else {
+          nukeAvailable = true;
+          nukeCooldownEl.innerText = 'Ydinpommi: Valmis!';
+          const nukeBtn = document.getElementById('btn-nuke');
+          nukeBtn.classList.remove('disabled');
+        }
+      } else {
+        nukeCooldownEl.innerText = 'Ydinpommi: Valmis!';
+      }
+    }
+
     function spawnAsteroid() {
       const size = Math.random()*40 + 20;
       asteroids.push({
@@ -220,45 +439,29 @@
       });
     }
 
-    // Ääniefektit
-    function playTone(freq, dur=0.1) {
-      const actx = new (window.AudioContext||window.webkitAudioContext)();
-      const osc = actx.createOscillator();
-      const gain = actx.createGain();
-      osc.connect(gain); gain.connect(actx.destination);
-      osc.frequency.value = freq; osc.type = 'square';
-      osc.start();
-      gain.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
-      osc.stop(actx.currentTime + dur);
-    }
-
-    // Pisteet & peli over
-    let score = 0, over = false;
-    const scoreEl = document.getElementById('score');
-    const overEl  = document.getElementById('game-over');
-    const finalEl = document.getElementById('final-score');
-
-    let frame = 0;
     function loop() {
       if (over) return;
       ctx.clearRect(0, 0, W, H);
 
-      // Tähtitaivas
+      // Update nuke cooldown
+      updateNukeCooldown();
+
+      // Stars
       stars.forEach(s => { s.update(); s.draw(); });
 
-      // Pelaaja
+      // Player
       player.update(); player.draw();
 
-      // Luodit
+      // Bullets
       bullets.forEach((b, i) => {
         b.update(); b.draw();
         if (b.x > W + b.size || b.y < 0 || b.y > H) bullets.splice(i, 1);
       });
 
-      // Uusia asteroideja
+      // Spawn asteroids
       if (frame % 70 === 0) spawnAsteroid();
 
-      // Asteroidit
+      // Asteroids
       asteroids.forEach((a, i) => {
         ctx.fillStyle = '#888';
         ctx.beginPath();
@@ -266,7 +469,7 @@
         ctx.fill();
         a.x -= a.speed;
 
-        // Luodin osuma
+        // Bullet collision
         bullets.forEach((b, bi) => {
           const dx = b.x - a.x, dy = b.y - a.y;
           if (Math.hypot(dx, dy) < a.size/2 + b.size) {
@@ -274,79 +477,113 @@
             bullets.splice(bi, 1);
             score += 2;
             scoreEl.innerText = 'Pisteet: ' + score;
-            playTone(800, 0.05);
           }
         });
 
-        // Pelaaja-törmäys
+        // Player collision
         const dxp = player.x - a.x, dyp = player.y - a.y;
         if (Math.hypot(dxp, dyp) < a.size/2 + player.size/2) {
           over = true;
-          finalEl.innerText = `Pisteet: ${score}`;
+          saveScore(playerName, score);
+          finalEl.innerHTML = `<h3>Peli ohi, ${playerName}!</h3><p>Pisteet: ${score}</p>`;
           overEl.style.display = 'block';
-          playTone(100, 0.5);
-          bgMusic.pause();
         }
 
-        // Poistu ruudusta
+        // Off screen
         if (a.x + a.size < 0) {
           asteroids.splice(i, 1);
           score++;
           scoreEl.innerText = 'Pisteet: ' + score;
-          playTone(300, 0.05);
         }
       });
 
       frame++;
       requestAnimationFrame(loop);
     }
-    loop();
 
-    // Näppäimistöohjaus (2x nopeampi liike)
+    // Controls
     document.addEventListener('keydown', e => {
+      if (!gameStarted || over) return;
+      
       if (e.code === 'ArrowUp' || e.code === 'Space') {
-        player.dy = -12; playTone(500, 0.02); // 2x nopeampi
+        player.dy = -12;
       }
-      if (e.code === 'ArrowDown') player.dy = 12; // 2x nopeampi
+      if (e.code === 'ArrowDown') player.dy = 12;
       if (e.code === 'KeyX') {
         bullets.push(new Bullet(player.x + player.size/2, player.y));
-        playTone(1000, 0.02);
       }
-      if (e.code === 'KeyC') { // Sarjatuli C-näppäimellä
+      if (e.code === 'KeyC') {
         fireSpreadShot(player.x + player.size/2, player.y);
-        playTone(1200, 0.1);
+      }
+      if (e.code === 'KeyN') {
+        fireNuke();
       }
     });
-    document.addEventListener('keyup', () => { player.dy = 0; });
+    
+    document.addEventListener('keyup', () => { 
+      if (gameStarted && !over) player.dy = 0; 
+    });
 
-    // Mobiiliohjaus (2x nopeampi liike)
+    // Mobile controls
     const up = document.getElementById('btn-up'),
           dn = document.getElementById('btn-down'),
           sh = document.getElementById('btn-shoot'),
-          sp = document.getElementById('btn-spread');
+          sp = document.getElementById('btn-spread'),
+          nk = document.getElementById('btn-nuke');
     
-    up.addEventListener('touchstart', e => { e.preventDefault(); player.dy = -12; playTone(500, 0.02); }); // 2x nopeampi
-    dn.addEventListener('touchstart', e => { e.preventDefault(); player.dy = 12; }); // 2x nopeampi
+    up.addEventListener('touchstart', e => { 
+      e.preventDefault(); 
+      if (gameStarted && !over) player.dy = -12; 
+    });
+    
+    dn.addEventListener('touchstart', e => { 
+      e.preventDefault(); 
+      if (gameStarted && !over) player.dy = 12; 
+    });
+    
     sh.addEventListener('touchstart', e => {
       e.preventDefault();
-      bullets.push(new Bullet(player.x + player.size/2, player.y));
-      playTone(1000, 0.02);
-    });
-    sp.addEventListener('touchstart', e => {
-      e.preventDefault();
-      fireSpreadShot(player.x + player.size/2, player.y);
-      playTone(1200, 0.1);
+      if (gameStarted && !over) {
+        bullets.push(new Bullet(player.x + player.size/2, player.y));
+      }
     });
     
-    const stop = e => { e.preventDefault(); player.dy = 0; };
+    sp.addEventListener('touchstart', e => {
+      e.preventDefault();
+      if (gameStarted && !over) {
+        fireSpreadShot(player.x + player.size/2, player.y);
+      }
+    });
+    
+    nk.addEventListener('touchstart', e => {
+      e.preventDefault();
+      if (gameStarted && !over) {
+        fireNuke();
+      }
+    });
+    
+    const stop = e => { 
+      e.preventDefault(); 
+      if (gameStarted && !over) player.dy = 0; 
+    };
+    
     up.addEventListener('touchend', stop);
     dn.addEventListener('touchend', stop);
 
-    // Canvas resize
+    // Resize handler
     window.addEventListener('resize', () => {
       W = canvas.width = window.innerWidth;
       H = canvas.height = window.innerHeight;
+      if (gameStarted) {
+        player.y = Math.min(player.y, H - player.size);
+      }
     });
+
+    // Allow Enter key to start game
+    document.getElementById('nickname-input').addEventListener('keypress', e => {
+      if (e.key === 'Enter') startGame();
+    });
+
   })();
   </script>
 </body>
